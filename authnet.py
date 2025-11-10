@@ -245,7 +245,8 @@ def main(card):
     result = ppc(card)
     status, message = parse_result(result)
     error_code = get_error_code(status)
-    return {"msg": error_code}
+    formatted_response = f"response - {message}({error_code})"
+    return {"response": formatted_response}
 
 app = Flask(__name__)
 
@@ -253,7 +254,7 @@ app = Flask(__name__)
 def check_card():
     cc = request.args.get('cc')
     if not cc:
-        return jsonify({"msg": "0"})
+        return jsonify({"response": "response - Missing cc parameter(0)"})
     
     result = main(cc)
     return jsonify(result)
