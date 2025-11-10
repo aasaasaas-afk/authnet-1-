@@ -233,19 +233,19 @@ def parse_result(result):
 def get_error_code(status):
     """Map status to error code"""
     if status == "APPROVED":
-        return "1"
+        return "100"  # Success code
     elif status == "DECLINED":
-        return "2"
+        return "251"  # Declined code as requested
     elif status == "CCN":
-        return "3"
+        return "200"  # CVV/CVN issue code
     else:  # ERROR or any other status
-        return "0"
+        return "0"    # General error code
 
 def main(card):
     result = ppc(card)
     status, message = parse_result(result)
     error_code = get_error_code(status)
-    return f"{error_code}:{message}"
+    return {"msg": error_code}
 
 app = Flask(__name__)
 
@@ -253,9 +253,10 @@ app = Flask(__name__)
 def check_card():
     cc = request.args.get('cc')
     if not cc:
-        return "0:Missing cc parameter"
+        return jsonify({"msg": "0"})
     
-    return main(cc)
+    result = main(cc)
+    return jsonify(result)
 
 if __name__ == '__main__':
     app.run(debug=True)
