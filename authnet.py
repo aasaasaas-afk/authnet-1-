@@ -1,11 +1,10 @@
-# authnet.py
-
 import sys
 import re
 import random
 import requests
 from bs4 import BeautifulSoup
 import json
+from flask import Flask, request, jsonify
 
 # --- Payment Config ---
 DOMAIN = "https://northstarvets.com"
@@ -231,9 +230,22 @@ def parse_result(result):
     except Exception as e:
         return "ERROR", f"Parse error: {str(e)}"
 
+def get_error_code(status):
+    """Map status to error code"""
+    if status == "APPROVED":
+        return "1"
+    elif status == "DECLINED":
+        return "2"
+    elif status == "CCN":
+        return "3"
+    else:  # ERROR or any other status
+        return "0"
+
 def main(card):
     result = ppc(card)
-    return parse_result(result)
+    status, message = parse_result(result)
+    error_code = get_error_code(status)
+    return f"{error_code}:{message}"
 
 app = Flask(__name__)
 
@@ -241,12 +253,9 @@ app = Flask(__name__)
 def check_card():
     cc = request.args.get('cc')
     if not cc:
-        return jsonify({"error": "Missing cc parameter"})
+        return "0:Missing cc parameter"
     
-    status, message = main(cc)
-    return jsonify({"status": status, "message": message})
+    return main(cc)
 
 if __name__ == '__main__':
     app.run(debug=True)
-</parameter
-</xai:function_call
